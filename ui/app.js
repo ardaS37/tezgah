@@ -28,6 +28,7 @@ const paths = {
   antigravity: '<path d="M12 2c1 6 4 9 10 10-6 1-9 4-10 10-1-6-4-9-10-10 6-1 9-4 10-10Z" fill="currentColor" stroke="none"/>',
   checklist: '<rect x="4" y="4" width="16" height="17" rx="2"/><path d="m7 9 1 1 2-2m3 1h4m-10 6 1 1 2-2m3 1h4"/>',
   bolt: '<path d="m13 2-8 12h6l-1 8 9-12h-6l1-8Z"/>',
+  speed: '<path d="M5 19a9 9 0 1 1 14 0H5ZM12 13l4-4"/><circle cx="12" cy="13" r="1"/>',
   clip: '<path d="m9 15 6-6a2 2 0 0 1 3 3l-8 8a4 4 0 0 1-6-6l9-9a5 5 0 0 1 7 7l-8 8"/>',
   handoff: '<path d="M4 7h14m-4-4 4 4-4 4m6 6H6m4-4-4 4 4 4"/>',
   shield: '<path d="M12 3c3 2 6 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6c2 0 5-1 8-3Z"/><path d="m9 12 2 2 4-4"/>',
@@ -36,7 +37,7 @@ const paths = {
   dots: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   square: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
   circle: '<circle cx="12" cy="12" r="7"/>', clock: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
-  branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 7v10m0-4h6a6 6 0 0 0 6-5"/>',
+  orchestrator: '<path d="m12 2 3.5 3.5L12 9 8.5 5.5 12 2ZM12 9v7M4 16v-3h16v3"/><circle cx="4" cy="19" r="2.25"/><circle cx="12" cy="19" r="2.25"/><circle cx="20" cy="19" r="2.25"/>',
 };
 
 function icon(name) {
@@ -121,6 +122,8 @@ const modelKey = (agent) => JSON.stringify([agent.provider, agent.model]);
 const profile = (agent) => ({ permissions: 'ask', ...modelProfiles.get(modelKey(agent)) });
 const activeEffort = (agent) => profile(agent).effort ?? agent.effort;
 const activeMode = (agent) => profile(agent).mode ?? agent.mode;
+const supportsFastMode = (agent) => catalogModel(agent)?.supportsFastMode === true;
+const fastModeOn = (agent) => supportsFastMode(agent) && profile(agent).fastMode === true;
 const canSend = (agent) => !!(agent.draft.trim() || agent.image || (agent.goal && (agent.goal !== agent.sentGoal || agent.resumeGoal)));
 const handoffTarget = (agent) => JSON.stringify([agent.project, agent.provider, agent.model, activeMode(agent), activeEffort(agent), profile(agent)]);
 
@@ -284,26 +287,55 @@ function renderWorkerMonitor() {
   select.value = leader?.id || '';
   select.disabled = !!leader && busy.has(leader.id);
   $('orchestrator-team').disabled = !leader || busy.has(leader.id);
-  const recent = orchestration.jobs.filter((job) => job.leaderId === leader?.id).slice(-12).reverse();
+  const focused = monitor.contains(document.activeElement) ? document.activeElement : null;
+  const jobs = orchestration.jobs.filter((job) => job.leaderId === leader?.id);
+  const recent = [...jobs.filter((job) => job.status === 'running').reverse(), ...jobs.filter((job) => job.status !== 'running').slice(-12).reverse()];
   const statuses = { running: 'Çalışıyor', completed: 'Tamamlandı', failed: 'Başarısız', cancelled: 'Durduruldu', interrupted: 'Yarım kaldı' };
+  const current = new Map([...monitor.querySelectorAll('.worker-job')].map((row) => [row.dataset.job, row]));
   const rows = recent.map((job) => {
     const worker = agentOf(job.workerId);
-    const run = busy.get(job.workerId);
-    const waits = job.status === 'running' && run?.approvals.size > 0;
+    const active = busy.get(job.workerId);
+    const run = job.status === 'running' && active?.jobId === job.id ? active : null;
+    const approvals = worker && run ? [...run.approvals.values()].map((event) => {
+      event.monitorCard ??= approvalCard(worker, event);
+      return event.monitorCard;
+    }) : [];
     const partial = run && [...run.outputs.values()].at(-1)?.text;
     const result = job.result || (job.status === 'running' ? partial || run?.activity : '');
-    const view = button('icon-button small', t('Ajan sohbetini aç'), icon('corner'));
+    let row = current.get(job.id);
+    if (!row) {
+      const view = button('icon-button small', '', icon('corner'));
+      const identity = el('div', 'worker-identity', el('strong', '', job.workerName), job.projectName ? el('span', '', job.projectName) : null);
+      row = el('article', 'worker-job', el('header', '', providerIcon(job.provider), identity, el('small'), view),
+        el('div', 'worker-approvals'), el('div', 'worker-task', job.prompt), el('div', 'worker-result'));
+      row.dataset.job = job.id;
+    }
+    row.className = `worker-job ${job.status}`;
+    row.querySelector('header > small').textContent = t(approvals.length ? 'Onay bekliyor' : statuses[job.status]);
+    const view = row.querySelector('header > button');
+    view.title = t('Ajan sohbetini aç');
+    view.setAttribute('aria-label', view.title);
     view.disabled = !worker;
     view.onclick = () => selectAgent(worker, true);
-    const identity = el('div', 'worker-identity', el('strong', '', job.workerName), job.projectName ? el('span', '', job.projectName) : null);
-    return el('article', `worker-job ${job.status}`, el('header', '', providerIcon(job.provider), identity, el('small', '', t(waits ? 'Onay bekliyor' : statuses[job.status])), view),
-      el('div', 'worker-task', job.prompt), result ? el('div', 'worker-result', t(result).slice(0, 360)) : null);
+    const requests = row.querySelector('.worker-approvals');
+    for (const card of [...requests.children]) if (!approvals.includes(card)) card.remove();
+    for (const card of approvals) if (card.parentElement !== requests) requests.append(card);
+    const output = row.querySelector('.worker-result');
+    output.hidden = !result;
+    output.textContent = result ? t(result).slice(0, 360) : '';
+    return row;
   });
   const scroll = monitor.scrollTop;
-  monitor.replaceChildren(el('header', 'worker-monitor-title', el('strong', '', t('Ajan görevleri')),
-    el('small', '', t('{count} ajan seçili', { count: orchestration.workerIds.length }))), ...rows);
+  const title = el('header', 'worker-monitor-title', el('strong', '', t('Ajan görevleri')),
+    el('small', '', t('{count} ajan seçili', { count: orchestration.workerIds.length })));
+  monitor.querySelector('.worker-monitor-title')?.remove();
+  monitor.querySelector('.worker-empty')?.remove();
+  monitor.prepend(title);
+  for (const row of current.values()) if (!rows.includes(row)) row.remove();
+  for (const [index, row] of rows.entries()) if (monitor.children[index + 1] !== row) monitor.insertBefore(row, monitor.children[index + 1] ?? null);
   if (!rows.length) monitor.append(el('p', 'worker-empty', t('Bu ekipte henüz görev yok.')));
   monitor.scrollTop = scroll;
+  if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
 }
 
 function jobResult(job) {
@@ -324,9 +356,12 @@ async function handleWorkerRequest(leader, run, event) {
       const job = { id: crypto.randomUUID(), leaderId: leader.id, workerId: worker.id, workerName: worker.name, provider: worker.provider, projectName: projectOf(worker.project)?.name, prompt: task.prompt.slice(0, 500), status: 'running' };
       run.jobs.push(job);
       orchestration.jobs.push(job);
-      if (orchestration.jobs.length > 48) orchestration.jobs.splice(0, orchestration.jobs.length - 48);
+      if (orchestration.jobs.length > 48) {
+        const oldestFinished = orchestration.jobs.findIndex((entry) => entry.status !== 'running');
+        if (oldestFinished !== -1) orchestration.jobs.splice(oldestFinished, 1);
+      }
       const text = t('{agent} tarafından verilen görev:\n{task}', { agent: leader.name, task: task.prompt });
-      job.done = submit(worker, { text, delegatedBy: leader.id, mode: run.mode === 'plan' ? 'plan' : undefined }).then((outcome) => {
+      job.done = submit(worker, { text, delegatedBy: leader.id, jobId: job.id, mode: run.mode === 'plan' ? 'plan' : undefined }).then((outcome) => {
         job.status = outcome?.status ?? 'failed';
         job.result = outcome?.result ?? '';
         renderWorkerMonitor();
@@ -360,6 +395,7 @@ function createAgentPane(agent) {
   prompt.maxLength = 60_000;
   prompt.value = agent.draft;
   prompt.setAttribute('aria-label', t('{agent} mesajı', { agent: agent.name }));
+  prompt.setAttribute('aria-autocomplete', 'list');
   const context = el('div', 'composer-context');
   const controls = el('div', 'composer-controls');
   const send = button('send-button', t('Mesajı gönder'), icon('arrowUp'));
@@ -380,14 +416,97 @@ function createAgentPane(agent) {
   prompt.addEventListener('input', () => {
     agent.draft = prompt.value;
     send.disabled = !busy.has(agent.id) && !canSend(agent);
+    if (!busy.has(agent.id)) renderSlashMenu(agent);
     saveView();
   });
+  prompt.addEventListener('focus', () => { if (!busy.has(agent.id)) renderSlashMenu(agent); });
+  prompt.addEventListener('blur', () => { if (popAnchor === prompt) closePopover(); });
   prompt.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.isComposing && !busy.has(agent.id)) {
+    if (event.isComposing || busy.has(agent.id) || event.shiftKey || event.altKey) return;
+    if (popAnchor === prompt && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+      const options = [...$('popover').querySelectorAll('.slash-option')];
+      const current = options.findIndex((option) => option.getAttribute('aria-selected') === 'true');
+      const step = event.key === 'ArrowDown' ? 1 : -1;
       event.preventDefault();
-      submit(agent);
+      selectSlashOption(prompt, options[(options.length + current + step) % options.length]);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const highlighted = popAnchor === prompt && $('popover').querySelector('.slash-option[aria-selected="true"]');
+      if (highlighted) highlighted.click();
+      else submit(agent);
     }
   });
+}
+
+const slashCommands = {
+  model: ['sparkle', 'Model seç', (agent) => layouts.get(agent.id)?.controls.querySelector('.model').click()],
+  effort: ['bolt', 'Düşünme seviyesi', (agent) => layouts.get(agent.id)?.controls.querySelector('.effort-toggle').click()],
+  fast: ['speed', 'Fast Mode’u aç veya kapat', (agent, value) => setFastMode(agent, value ? value === 'on' : !fastModeOn(agent))],
+  plan: ['checklist', 'Plan modunu aç veya kapat', (agent) => setMode(agent, activeMode(agent) === 'plan' ? 'code' : 'plan')],
+  code: ['terminal', 'Kod moduna geç', (agent) => setMode(agent, 'code')],
+  permissions: ['shield', 'Onay ayarlarını aç', (agent) => layouts.get(agent.id)?.controls.querySelector('.permissions-toggle').click()],
+  goal: ['target', 'Görev hedefi', goalDialog],
+  split: ['layout', 'Ajanları yan yana göster', () => $('view-split').click()],
+  orchestrator: ['orchestrator', 'Orchestrator görünümünü aç', () => $('view-orchestrator').click()],
+};
+
+function selectSlashOption(prompt, next) {
+  if (!next) return;
+  $('popover').querySelector('[aria-selected="true"]')?.setAttribute('aria-selected', 'false');
+  next.setAttribute('aria-selected', 'true');
+  prompt.setAttribute('aria-activedescendant', next.id);
+  next.scrollIntoView({ block: 'nearest' });
+}
+
+function renderSlashMenu(agent) {
+  const prompt = layouts.get(agent.id).prompt;
+  const query = prompt.value.trimStart();
+  const matches = /^\/[a-z-]*$/i.test(query) ? Object.entries(slashCommands)
+    .filter(([name]) => name.startsWith(query.slice(1).toLowerCase()) && (name !== 'fast' || supportsFastMode(agent))) : [];
+  if (!matches.length) {
+    if (popAnchor === prompt) closePopover();
+    return;
+  }
+  const choices = matches.map(([name, [glyph, label]]) => {
+    const entry = button('menu-item slash-option', '', icon(glyph), el('code', '', `/${name}`), el('span', 'menu-fill', t(label)));
+    entry.id = `slash-${name}`;
+    entry.tabIndex = -1;
+    entry.setAttribute('role', 'option');
+    entry.setAttribute('aria-selected', 'false');
+    entry.onmousedown = (event) => event.preventDefault();
+    entry.onclick = () => runSlashCommand(agent, `/${name}`);
+    return entry;
+  });
+  const list = el('div', 'slash-options', ...choices);
+  list.id = 'slash-commands';
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', t('Komutlar'));
+  if (popAnchor === prompt) {
+    $('popover').replaceChildren(list);
+    positionPopover();
+  } else openPopover(prompt, () => [list], 'slash-menu', false);
+  prompt.setAttribute('aria-controls', list.id);
+  selectSlashOption(prompt, choices[0]);
+}
+
+function runSlashCommand(agent, text) {
+  if (text === '/') { renderSlashMenu(agent); return true; }
+  const match = /^\/([a-z-]+)(?:[ \t]+(on|off))?$/i.exec(text);
+  const name = match?.[1].toLowerCase();
+  const value = match?.[2]?.toLowerCase();
+  if (!Object.hasOwn(slashCommands, name) || (value && name !== 'fast')) return false;
+  closePopover();
+  setDraft(agent, '', false);
+  slashCommands[name][2](agent, value);
+  return true;
+}
+
+function setFastMode(agent, enabled) {
+  if (!supportsFastMode(agent)) { toast(t('Bu model Fast Mode’u desteklemiyor.')); return; }
+  saveModelOption(agent, 'fastMode', enabled);
+  toast(t(enabled ? 'Fast Mode açık' : 'Fast Mode kapalı'));
 }
 
 function composerTool(className, glyph, label, title, arrow = true) {
@@ -415,7 +534,7 @@ function updateAgentControls(agent) {
   const prefs = profile(agent);
   const chosenEffort = activeEffort(agent);
   const chosenMode = activeMode(agent);
-  const effort = composerTool('', 'bolt', `${t(effortLabels[chosenEffort] || chosenEffort)}${agent.provider === 'claude' && prefs.ultracode ? ' · Ultra' : ''}`, t('Düşünme seviyesi'));
+  const effort = composerTool('effort-toggle', 'bolt', `${t(effortLabels[chosenEffort] || chosenEffort)}${agent.provider === 'claude' && prefs.ultracode ? ' · Ultra' : ''}`, t('Düşünme seviyesi'));
   effort.onclick = () => openPopover(effort, () => {
     const levels = catalogModel(agent)?.efforts ?? (agent.provider === 'antigravity' ? [] : ['low', 'medium', 'high', 'xhigh']);
     return [el('div', 'popover-heading', t('Düşünme seviyesi')), ...['', ...levels].map((level) => menuButton('bolt', t(effortLabels[level] || level), () => saveModelOption(agent, 'effort', level), { checked: chosenEffort === level })),
@@ -432,8 +551,14 @@ function updateAgentControls(agent) {
   const permissions = button('composer-tool permissions-toggle', t('Onay ayarı · {setting}', { setting: t(approvalLabels[prefs.permissions]) }), icon('shield'));
   permissions.classList.toggle('full-access', prefs.permissions === 'full');
   permissions.onclick = () => approvalPopover(permissions, agent);
+  const fast = supportsFastMode(agent) ? button('composer-tool fast-toggle', t(fastModeOn(agent) ? 'Fast Mode açık' : 'Fast Mode kapalı'), icon('speed')) : null;
+  if (fast) {
+    fast.setAttribute('aria-pressed', fastModeOn(agent));
+    fast.disabled = running;
+    fast.onclick = () => setFastMode(agent, !fastModeOn(agent));
+  }
   model.disabled = effort.disabled = mode.disabled = actions.disabled = permissions.disabled = running;
-  layout.controls.replaceChildren(model, effort, mode, el('span', 'composer-spacer'), el('div', 'composer-end', actions, permissions, layout.send));
+  layout.controls.replaceChildren(model, effort, mode, el('span', 'composer-spacer'), el('div', 'composer-end', fast, actions, permissions, layout.send));
   layout.send.disabled = !running && !canSend(agent);
   layout.send.classList.toggle('running', running);
   layout.send.title = running ? t('Ajanı durdur') : t('Mesajı gönder');
@@ -551,11 +676,24 @@ function approvalCard(agent, event) {
   if (event.detail) card.append(el('pre', '', event.detail));
   const actions = el('div', 'approval-actions');
   const reply = async (value) => {
+    const run = busy.get(agent.id);
+    if (run?.approvals.get(event.requestId) !== event || event.replying) return;
+    const setReplying = (pending) => {
+      event.replying = pending;
+      for (const node of [event.card, event.monitorCard].filter(Boolean)) {
+        node.setAttribute('aria-busy', String(pending));
+        for (const control of node.querySelectorAll('button, input')) control.disabled = pending;
+      }
+    };
+    setReplying(true);
     try {
       await request('turn/reply', { method: 'POST', body: { id: agent.id, requestId: event.requestId, value } });
-      busy.get(agent.id)?.approvals.delete(event.requestId);
-      card.remove();
-    } catch (error) { toast(error.message); }
+    } catch (error) {
+      if (error.status !== 404) { setReplying(false); toast(error.message); return; }
+    }
+    run.approvals.delete(event.requestId);
+    renderTranscript(agent);
+    if (run.jobId) renderWorkerMonitor();
   };
   if (event.kind === 'input') {
     const fields = new Map();
@@ -584,6 +722,10 @@ function approvalCard(agent, event) {
   no.onclick = () => reply(false);
   actions.append(no);
   card.append(actions);
+  if (event.replying) {
+    card.setAttribute('aria-busy', 'true');
+    for (const control of card.querySelectorAll('input, button')) control.disabled = true;
+  }
   return card;
 }
 
@@ -649,7 +791,7 @@ async function stopTurn(agent) {
   renderTranscript(agent);
   for (const job of run.jobs) {
     const worker = agentOf(job.workerId);
-    if (worker && job.status === 'running' && busy.get(worker.id)?.delegatedBy === agent.id) void stopTurn(worker);
+    if (worker && job.status === 'running' && busy.get(worker.id)?.jobId === job.id) void stopTurn(worker);
   }
   try { await request('turn/cancel', { method: 'POST', body: { id: agent.id } }); }
   catch (error) { toast(error.message); }
@@ -657,6 +799,7 @@ async function stopTurn(agent) {
 
 async function submit(agent, handoff) {
   if ((!handoff && !canSend(agent)) || busy.has(agent.id)) return;
+  if (!handoff && runSlashCommand(agent, agent.draft.trim())) return;
   if (!handoff && agent.image && catalogModel(agent)?.supportsVision === false) { toast(t('Bu model çizim kabul etmiyor. Görsel destekli bir model seç.')); return; }
   const text = handoff?.text || agent.draft.trim() || (agent.goal ? t('Bu görev hedefi üzerinde çalış.') : t('Eklediğim çizimi incele.'));
   const delegatedBy = handoff?.delegatedBy;
@@ -673,7 +816,7 @@ async function submit(agent, handoff) {
   const resumeGoal = !handoff && agent.resumeGoal === true;
   if (resumeGoal) agent.resumeGoal = false;
   const turn = crypto.randomUUID();
-  const run = { project: agent.project, turn, approvals: new Map(), outputs: new Map(), activity: t('Ajan başlatılıyor…'), done: false, frame: 0, team, jobs: [], delegatedBy, mode };
+  const run = { project: agent.project, turn, approvals: new Map(), outputs: new Map(), activity: t('Ajan başlatılıyor…'), done: false, frame: 0, team, jobs: [], jobId: handoff?.jobId, mode };
   const labels = [...attachments.map((item) => item.file), ...(image ? [t('Çizim')] : [])];
   agent.messages.push({ id: turn, turn, project: agent.project, role: 'user', text: labels.length ? `${text}\n\n${t('Ekler: {list}', { list: labels.join(', ') })}` : text });
   if (!handoff) {
@@ -721,6 +864,7 @@ async function submit(agent, handoff) {
       run.activity = event.text || run.activity;
       if (event.refresh && editorProject === agent.project) checkEditorChanges();
     }
+    if (event.type === 'notice' && event.text) agent.messages.push({ id: crypto.randomUUID(), turn, role: 'notice', text: event.text });
     if (event.type === 'approval') run.approvals.set(event.requestId, event);
     if (event.type === 'error') {
       run.done = true;
@@ -740,7 +884,7 @@ async function submit(agent, handoff) {
   };
   try {
     const chromeTab = agent.chromeTab?.model === modelKey(agent) ? agent.chromeTab.id : '';
-    const response = await request('turn', { method: 'POST', raw: true, body: { id: agent.id, provider: agent.provider, project: agent.project, prompt, model: agent.model, effort: activeEffort(agent), mode, resume: delegatedBy ? '' : agent.resume, options: { ...profile(agent), chromeTab, workers: team }, image, goal, resumeGoal } });
+    const response = await request('turn', { method: 'POST', raw: true, body: { id: agent.id, provider: agent.provider, project: agent.project, prompt, model: agent.model, effort: activeEffort(agent), mode, resume: delegatedBy ? '' : agent.resume, options: { ...profile(agent), fastMode: fastModeOn(agent), chromeTab, workers: team }, image, goal, resumeGoal } });
     if (run.stopRequested) stopTurn(agent);
     let buffer = '';
     for await (const chunk of response.body.pipeThrough(new TextDecoderStream())) {
@@ -968,7 +1112,7 @@ function positionPopover() {
   pop.style.top = `${up ? rect.top - pop.offsetHeight - 5 : rect.bottom + 5}px`;
 }
 
-function openPopover(anchor, build, className = '') {
+function openPopover(anchor, build, className = '', focus = true) {
   if (popAnchor === anchor && !$('popover').hidden) { closePopover(); return; }
   popAnchor = anchor;
   const pop = $('popover');
@@ -976,13 +1120,16 @@ function openPopover(anchor, build, className = '') {
   pop.replaceChildren(...build());
   pop.hidden = false;
   positionPopover();
-  (pop.querySelector('input') || pop.querySelector('button:not([disabled])'))?.focus({ preventScroll: true });
+  if (focus) (pop.querySelector('input') || pop.querySelector('button:not([disabled])'))?.focus({ preventScroll: true });
 }
 
 function closePopover(returnFocus = false) {
-  if (returnFocus) popAnchor?.focus({ preventScroll: true });
+  const anchor = popAnchor;
+  anchor?.removeAttribute('aria-activedescendant');
+  if (anchor?.classList.contains('prompt')) anchor.removeAttribute('aria-controls');
   popAnchor = popRender = null;
   $('popover').hidden = true;
+  if (returnFocus && anchor !== document.activeElement) anchor?.focus({ preventScroll: true });
 }
 
 function modelPopover(anchor, agent) {

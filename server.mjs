@@ -205,6 +205,7 @@ export async function startServer({
         }
         const settings = {
           permissions, ultracode: provider === 'claude' && options?.ultracode === true,
+          fastMode: (provider === 'codex' || provider === 'claude') && options?.fastMode === true,
           browser: mode === 'code' && options?.browser === true,
           computer: mode === 'code' && options?.computer === true,
           chrome: mode === 'code' && provider === 'claude' && options?.chrome === true,
