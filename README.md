@@ -7,6 +7,7 @@ Konsey is a Windows desktop workspace for Codex, Claude Code, and Google Antigra
 ## What you can do
 
 - Split the workspace into up to eight agent panels. Agents can work in the same folder or in different projects. Review a reply before handing it off to another agent, and queue the handoff if the target agent is busy.
+- Choose a folder in the top bar to set the editor and the agents’ default working folder. To give one agent a different folder, use **Edit agent → Working folder**. Selecting a folder again in the top bar resets those overrides for future tasks.
 - Open **Orchestrator**, choose a lead agent and its workers, then send the lead a task. The lead can delegate independent work across the selected agents. See tasks and results in **Worker tasks**, and approve or decline requests in that panel.
 - Use one model picker for all three providers. Konsey remembers reasoning effort, work mode, approval preferences, and tool settings per model. Claude Code also exposes Ultracode for supported models.
 - Type `/` in the composer for shortcuts such as `/model`, `/effort`, `/plan`, `/permissions`, and `/orchestrator`. On supported Codex and Claude Code models, use the speed button or `/fast` to toggle Fast Mode. Use `/fast on` and `/fast off` to set it explicitly. Fast Mode can affect provider usage and billing.

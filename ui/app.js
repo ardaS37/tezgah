@@ -124,6 +124,7 @@ const activeEffort = (agent) => profile(agent).effort ?? agent.effort;
 const activeMode = (agent) => profile(agent).mode ?? agent.mode;
 const supportsFastMode = (agent) => catalogModel(agent)?.supportsFastMode === true;
 const fastModeOn = (agent) => supportsFastMode(agent) && profile(agent).fastMode === true;
+const pendingFolder = (agent) => !agent.projectOverride && agent.project !== editorProject;
 const canSend = (agent) => !!(agent.draft.trim() || agent.image || (agent.goal && (agent.goal !== agent.sentGoal || agent.resumeGoal)));
 const handoffTarget = (agent) => JSON.stringify([agent.project, agent.provider, agent.model, activeMode(agent), activeEffort(agent), profile(agent)]);
 
@@ -137,7 +138,28 @@ function saveModelOption(agent, key, value) {
 function freshAgent(provider, project, name) {
   const models = catalogs[provider]?.models ?? [];
   const first = models.find((model) => model.isDefault) || (provider === 'claude' ? models[0] : null);
-  return { id: crypto.randomUUID(), name: name || providers[provider].name, provider, project, model: first?.id ?? '', modelName: first?.name ?? '', effort: first?.defaultEffort ?? '', mode: 'code', messages: [], draft: '', resume: '', state: 'idle' };
+  return { id: crypto.randomUUID(), name: name || providers[provider].name, provider, project, projectOverride: false, model: first?.id ?? '', modelName: first?.name ?? '', effort: first?.defaultEffort ?? '', mode: 'code', messages: [], draft: '', resume: '', state: 'idle' };
+}
+
+function resetAgentContext(agent) {
+  Object.assign(agent, { resume: '', attachments: [], image: '', chromeTab: null, sentGoal: '', goalStatus: '', resumeGoal: false });
+}
+
+function setAgentProject(agent, project) {
+  if (agent.project === project) return;
+  agent.project = project;
+  resetAgentContext(agent);
+  agent.goal = '';
+  agent.transferHistory = false;
+}
+
+function syncAgentProjects() {
+  const activeTeam = new Set([...busy.values()].flatMap((run) => run.team.map((worker) => worker.id)));
+  for (const agent of agents) {
+    if (!pendingFolder(agent) || busy.has(agent.id) || activeTeam.has(agent.id)) continue;
+    setAgentProject(agent, editorProject);
+    updateAgentControls(agent);
+  }
 }
 
 function toast(message) {
@@ -151,8 +173,8 @@ function saveView(immediately = false) {
   clearTimeout(saveTimer);
   const write = () => {
     const snapshot = {
-      agents: agents.map(({ id, name, provider, project, model, modelName, effort, mode, messages, draft, resume, transferHistory, goal, sentGoal, goalStatus }) => ({
-        id, name, provider, project, model, modelName, effort, mode, draft: draft.slice(0, 60_000), resume, transferHistory,
+      agents: agents.map(({ id, name, provider, project, projectOverride, model, modelName, effort, mode, messages, draft, resume, transferHistory, goal, sentGoal, goalStatus }) => ({
+        id, name, provider, project, projectOverride, model, modelName, effort, mode, draft: draft.slice(0, 60_000), resume, transferHistory,
         goal, sentGoal, goalStatus, messages: messages.slice(-20).map((entry) => ({ ...entry, text: entry.text?.slice(0, 9000), approval: undefined })),
       })),
       modelProfiles: [...modelProfiles], appearance, locale: getLocale(), selectedId, editorProject, viewMode, rightPanel, editorVisible, width, activeFile: openTab()?.file,
@@ -564,7 +586,8 @@ function updateAgentControls(agent) {
   layout.send.title = running ? t('Ajanı durdur') : t('Mesajı gönder');
   layout.send.setAttribute('aria-label', layout.send.title);
   layout.send.replaceChildren(icon(running ? 'square' : 'arrowUp'));
-  const status = running ? t('Ajan çalışıyor') : chosenMode === 'plan' ? t('Salt okunur planlama') : t(statusLabels[catalogs[agent.provider]?.status] || 'CLI bağlantısı kontrol ediliyor');
+  const status = pendingFolder(agent) ? t('Tur bitince çalışma klasörü · {project}', { project: projectOf(editorProject)?.name })
+    : running ? t('Ajan çalışıyor') : chosenMode === 'plan' ? t('Salt okunur planlama') : t(statusLabels[catalogs[agent.provider]?.status] || 'CLI bağlantısı kontrol ediliyor');
   layout.note.replaceChildren(el('span', '', status), el('span', 'keyboard-hint', el('kbd', '', '↵'), t(' gönder · '), el('kbd', '', '⇧ ↵'), t(' yeni satır')));
   const chips = (agent.attachments || []).map((entry) => contextChip(entry.folder ? 'folder' : 'file', entry.file, () => {
     agent.attachments = agent.attachments.filter((item) => item !== entry);
@@ -587,7 +610,7 @@ function renderHandoffQueue(agent, element) {
   const pending = queuedHandoffs.get(agent.id);
   element.hidden = !pending;
   if (!pending) { element.replaceChildren(); return; }
-  const running = busy.has(agent.id);
+  const running = busy.has(agent.id) || pendingFolder(agent);
   const changed = pending.target !== handoffTarget(agent);
   const remove = button('icon-button small', t('Sıradaki aktarımı kaldır'), icon('x'));
   remove.onclick = () => { queuedHandoffs.delete(agent.id); updateAgentControls(agent); };
@@ -606,7 +629,7 @@ function renderHandoffQueue(agent, element) {
 
 function runQueuedHandoff(agent) {
   const pending = queuedHandoffs.get(agent.id);
-  if (!pending || busy.has(agent.id) || pending.target !== handoffTarget(agent)) return;
+  if (!pending || busy.has(agent.id) || pendingFolder(agent) || pending.target !== handoffTarget(agent)) return;
   queuedHandoffs.delete(agent.id);
   submit(agent, pending);
 }
@@ -800,6 +823,10 @@ async function stopTurn(agent) {
 async function submit(agent, handoff) {
   if ((!handoff && !canSend(agent)) || busy.has(agent.id)) return;
   if (!handoff && runSlashCommand(agent, agent.draft.trim())) return;
+  if (!handoff?.delegatedBy && pendingFolder(agent)) {
+    toast(t('Tur bitince çalışma klasörü · {project}', { project: projectOf(editorProject)?.name }));
+    return;
+  }
   if (!handoff && agent.image && catalogModel(agent)?.supportsVision === false) { toast(t('Bu model çizim kabul etmiyor. Görsel destekli bir model seç.')); return; }
   const text = handoff?.text || agent.draft.trim() || (agent.goal ? t('Bu görev hedefi üzerinde çalış.') : t('Eklediğim çizimi incele.'));
   const delegatedBy = handoff?.delegatedBy;
@@ -902,11 +929,12 @@ async function submit(agent, handoff) {
   } finally {
     cancelAnimationFrame(run.frame);
     busy.delete(agent.id);
+    syncAgentProjects();
     renderGlobal();
     updateAgentControls(agent);
     renderTranscript(agent);
     saveView(true);
-    if (editorProject === agent.project) { refreshTree(); checkEditorChanges(); }
+    if (editorProject === run.project) { refreshTree(); checkEditorChanges(); }
     if (run.completed && !run.stopRequested) runQueuedHandoff(agent);
   }
   const result = [...run.outputs.values()].map((item) => item.text).join('\n\n') || run.steps?.map((step) => step.step).join('\n') || run.problem || '';
@@ -1206,8 +1234,9 @@ function agentDialog(agent) {
     name.value = agent?.name || '';
     const provider = el('select', '', ...Object.entries(providers).map(([id, entry]) => option(id, entry.name)));
     provider.value = agent?.provider || Object.keys(providers).find((id) => !agents.some((item) => item.provider === id)) || 'codex';
-    const project = el('select', '', ...projects.map((item) => option(item.id, item.name)));
-    project.value = agent?.project || editorProject;
+    const project = el('select', '', option('', t('Seçili proje · {project}', { project: projectOf(editorProject)?.name })),
+      ...projects.filter((item) => item.id !== editorProject).map((item) => option(item.id, item.name)));
+    project.value = agent?.projectOverride && agent.project !== editorProject ? agent.project : '';
     const running = agent && busy.has(agent.id);
     provider.disabled = project.disabled = !!running;
     const addProject = button('secondary-button', '', t('Proje ekle'));
@@ -1218,7 +1247,7 @@ function agentDialog(agent) {
         const fields = $('dialog').querySelectorAll('input, select');
         fields[0].value = draft.name;
         fields[1].value = draft.provider;
-        fields[2].value = added.id;
+        fields[2].value = added.id === editorProject ? '' : added.id;
       });
     };
     addProject.disabled = !!running;
@@ -1232,28 +1261,23 @@ function agentDialog(agent) {
       if (!agent && agents.length >= maxPanels) { error.textContent = t('Bölünmüş görünümde en fazla 8 ajan açılabilir.'); return; }
       let target = agent;
       if (!target) {
-        target = freshAgent(provider.value, project.value, name.value.trim());
+        target = freshAgent(provider.value, project.value || editorProject, name.value.trim());
+        target.projectOverride = !!project.value;
         agents.push(target);
         viewMode = 'split';
       } else {
-        const changedFolder = target.project !== project.value;
-        const changedProvider = target.provider !== provider.value;
-        if (changedProvider) {
-          const defaults = freshAgent(provider.value, project.value);
-          Object.assign(target, { provider: defaults.provider, model: defaults.model, modelName: defaults.modelName, effort: defaults.effort });
-        }
-        if (changedFolder || changedProvider) {
-          target.resume = '';
-          target.attachments = [];
-          target.image = '';
-          target.chromeTab = null;
-          target.sentGoal = '';
-          target.goalStatus = '';
-          if (changedFolder) target.goal = '';
-          target.transferHistory = !changedFolder && target.messages.length > 0;
+        if (!project.disabled && !busy.has(target.id)) {
+          if (target.provider !== provider.value) {
+            const defaults = freshAgent(provider.value, target.project);
+            Object.assign(target, { provider: defaults.provider, model: defaults.model, modelName: defaults.modelName, effort: defaults.effort });
+            resetAgentContext(target);
+            target.transferHistory = target.messages.length > 0;
+          }
+          target.projectOverride = !!project.value;
+          if (target.projectOverride) setAgentProject(target, project.value);
+          else syncAgentProjects();
         }
         target.name = name.value.trim() || providers[target.provider].name;
-        target.project = project.value;
       }
       selectedId = target.id;
       close();
@@ -1312,7 +1336,8 @@ function handoffDialog(source) {
       toast(t('{agent} için taslağa eklendi.', { agent: target.name }));
     };
     const send = button('button-primary');
-    const label = () => { send.textContent = busy.has(destination.value) ? t('Tur bitince çalıştır') : t('Aktar ve çalıştır'); };
+    const shouldQueue = (target) => busy.has(target.id) || pendingFolder(target);
+    const label = () => { send.textContent = shouldQueue(agentOf(destination.value)) ? t('Tur bitince çalıştır') : t('Aktar ve çalıştır'); };
     destination.onchange = label;
     label();
     send.onclick = () => {
@@ -1323,7 +1348,7 @@ function handoffDialog(source) {
       close();
       selectAgent(target);
       const pending = { source: source.name, text, target: handoffTarget(target) };
-      if (busy.has(target.id)) {
+      if (shouldQueue(target)) {
         queuedHandoffs.set(target.id, pending);
         updateAgentControls(target);
         toast(t('{agent} için sıraya alındı.', { agent: target.name }));
@@ -1472,20 +1497,27 @@ async function refreshCatalogs(force = false) {
 }
 
 function projectMenu() {
-  openPopover($('workspace-button'), () => [el('div', 'popover-heading', t('Editör projeleri')), ...projects.map((project) => menuButton('folder', project.name, () => switchEditorProject(project), { checked: project.id === editorProject })), menuButton('plus', t('Proje klasörü aç'), () => projectDialog())]);
+  openPopover($('workspace-button'), () => [el('div', 'popover-heading', t('Çalışma alanı klasörleri')), ...projects.map((project) => menuButton('folder', project.name, () => switchEditorProject(project), { checked: project.id === editorProject })), menuButton('plus', t('Proje klasörü aç'), () => projectDialog())]);
 }
 
-async function switchEditorProject(project) {
+function switchEditorProject(project) {
   if (!project) return;
+  const folderChanged = editorProject !== project.id;
   editorProject = project.id;
-  $('tree-search').value = '';
-  searchVersion++;
-  const latest = [...tabs.values()].findLast((tab) => tab.project === project.id);
-  setActiveTab(latest?.key || null);
+  for (const agent of agents) agent.projectOverride = false;
+  syncAgentProjects();
+  renderAgents();
+  if (folderChanged) {
+    $('tree-search').value = '';
+    searchVersion++;
+    fileSelection++;
+    const latest = [...tabs.values()].findLast((tab) => tab.project === project.id);
+    setActiveTab(latest?.key || null);
+    if (!latest && project.initialFile) void openFile(project.id, project.initialFile, false);
+  }
   renderGlobal();
   refreshTree();
-  if (!latest && project.initialFile) await openFile(project.id, project.initialFile, false);
-  saveView();
+  saveView(true);
 }
 
 async function fetchFolder(project, directory, force = false) {
@@ -1807,9 +1839,13 @@ async function init() {
     editorProject = projectOf(view.editorProject)?.id || projects[0].id;
     rightPanel = view.rightPanel || 'editor';
     if (Array.isArray(view.agents)) {
-      for (const entry of view.agents) if (providers[entry.provider] && projectOf(entry.project)) agents.push({ ...entry, state: 'idle' });
+      for (const entry of view.agents) {
+        if (!providers[entry.provider] || !projectOf(entry.project)) continue;
+        agents.push({ ...entry, projectOverride: entry.projectOverride ?? (entry.project !== editorProject), state: 'idle' });
+      }
     }
     if (!agents.length) agents.push(freshAgent('codex', editorProject), freshAgent('claude', editorProject));
+    syncAgentProjects();
     selectedId = agentOf(view.selectedId)?.id || agents[0].id;
     if (agentOf(view.orchestration?.leaderId)) {
       orchestration.leaderId = view.orchestration.leaderId;
