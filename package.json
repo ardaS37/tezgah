@@ -1,0 +1,12 @@
+{
+  "name": "tezgah",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node desktop.mjs",
+    "serve": "node server.mjs",
+    "check": "node --check desktop.mjs && node --check server.mjs && node --check lib/process.mjs && node --check lib/workspaces.mjs && node --check lib/providers.mjs && node --check ui/app.js && node --check ui/editor.js"
+  },
+  "engines": { "node": ">=22" }
+}
