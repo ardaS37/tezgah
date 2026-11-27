@@ -1,12 +1,31 @@
 {
   "name": "tezgah",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "productName": "Tezgah",
+  "description": "A local desktop workspace for coding agents and a side-by-side editor",
+  "main": "desktop.mjs",
   "scripts": {
-    "start": "node desktop.mjs",
+    "start": "electron .",
     "serve": "node server.mjs",
-    "check": "node --check desktop.mjs && node --check server.mjs && node --check lib/process.mjs && node --check lib/workspaces.mjs && node --check lib/providers.mjs && node --check ui/app.js && node --check ui/editor.js"
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "check": "node --check desktop.mjs && node --check server.mjs && node --check lib/process.mjs && node --check lib/workspaces.mjs && node --check lib/providers.mjs && node --check lib/agent-tools.mjs && node --check lib/electron-tools.mjs && node --check lib/chrome-tools.mjs && node --check lib/diff.mjs && node --check lib/preview.mjs && node --check ui/app.js && node --check ui/editor.js && node --check ui/inspector.js && node --check ui/i18n.js"
   },
-  "engines": { "node": ">=22" }
+  "engines": { "node": ">=22.12.0" },
+  "devDependencies": {
+    "electron": "45.5.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "io.github.ardas37.tezgah",
+    "files": ["desktop.mjs", "server.mjs", "lib/**", "ui/**", "assets/tezgah.ico"],
+    "extraResources": [{ "from": "example", "to": "example" }, { "from": "assets/computer-use.ps1", "to": "assets/computer-use.ps1" }],
+    "win": { "icon": "assets/tezgah.ico" },
+    "nsis": {
+      "artifactName": "Tezgah-Setup-${version}-${arch}.${ext}",
+      "perMachine": false,
+      "differentialPackage": false
+    }
+  }
 }

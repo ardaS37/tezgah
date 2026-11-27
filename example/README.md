@@ -1,5 +1,5 @@
-# Mini proje
+# Sample project
 
-`src/format.js` Türkçe para birimi ve ürün etiketleri biçimlendirir.
+`src/format.js` formats prices and product labels for a Turkish storefront.
 
-Testleri çalıştırmak için `node --test src/format.test.js` komutunu kullan.
+Run `node --test src/format.test.js` to check the formatting.

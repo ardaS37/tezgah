@@ -1,3 +1,4 @@
 .eksen-test/
 .protocol-local/
 node_modules/
+dist/

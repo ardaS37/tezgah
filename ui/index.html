@@ -1,68 +1,101 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en" data-appearance="terminal" data-palette="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#14161b">
-  <title>Tezgah · Kod Çalışma Alanı</title>
+  <title data-i18n="Tezgah · Kod Çalışma Alanı">Tezgah · Coding Workspace</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/themes.css">
 </head>
 <body>
   <div id="app" class="shell">
     <header class="topbar">
-      <button id="sidebar-toggle" class="icon-button compact-only" data-icon="sidebar" title="Gezgini aç veya kapat" aria-label="Gezgini aç veya kapat"></button>
+      <button id="sidebar-toggle" class="icon-button compact-only" data-icon="sidebar" title="Toggle sidebar" data-i18n-title="Gezgini aç veya kapat" aria-label="Toggle sidebar" data-i18n-aria-label="Gezgini aç veya kapat"></button>
       <div class="brand"><img src="/logo.svg" alt="" width="28" height="28"><span>Tezgah<span class="brand-period">.</span></span></div>
       <div class="top-divider"></div>
       <button id="workspace-button" class="top-project" type="button"></button>
       <div class="top-spacer"></div>
-      <button id="connections" class="connection-button" title="Sağlayıcı bağlantılarını yönet"><span class="connection-dot"></span><span>Bağlantılar</span></button>
-      <button id="editor-toggle" class="icon-button panel-button" aria-label="Editörü aç veya kapat" title="Editörü aç veya kapat" data-icon="layout"></button>
+      <button id="connections" class="connection-button" title="Manage provider connections" data-i18n-title="Sağlayıcı bağlantılarını yönet"><span class="connection-dot"></span><span data-i18n="Bağlantılar">Connections</span></button>
+      <button id="editor-toggle" class="icon-button panel-button" aria-label="Toggle editor" data-i18n-aria-label="Editörü aç veya kapat" title="Toggle editor" data-i18n-title="Editörü aç veya kapat" data-icon="layout"></button>
     </header>
     <div class="workbench">
-      <aside class="sidebar" aria-label="Çalışma gezgini">
+      <aside class="sidebar" aria-label="Workspace explorer" data-i18n-aria-label="Çalışma gezgini">
         <div class="sidebar-block agents-section">
-          <div class="section-label"><span>AJANLAR</span><button id="sidebar-add-agent" class="icon-button small" data-icon="plus" title="Yeni ajan" aria-label="Yeni ajan"></button></div>
+          <div class="section-label"><span data-i18n="AJANLAR">AGENTS</span><button id="sidebar-add-agent" class="icon-button small" data-icon="plus" title="New agent" data-i18n-title="Yeni ajan" aria-label="New agent" data-i18n-aria-label="Yeni ajan"></button></div>
           <div id="agent-list" class="agent-list"></div>
         </div>
         <div class="sidebar-block files-section">
-          <div class="section-label"><span>DOSYALAR</span><div class="inline-tools"><button id="new-file" class="icon-button small" data-icon="filePlus" title="Yeni dosya" aria-label="Yeni dosya"></button><button id="tree-refresh" class="icon-button small" data-icon="refresh" title="Dosyaları yenile" aria-label="Dosyaları yenile"></button></div></div>
+          <div class="section-label"><span data-i18n="DOSYALAR">FILES</span><div class="inline-tools"><button id="new-file" class="icon-button small" data-icon="filePlus" title="New file" data-i18n-title="Yeni dosya" aria-label="New file" data-i18n-aria-label="Yeni dosya"></button><button id="tree-refresh" class="icon-button small" data-icon="refresh" title="Refresh files" data-i18n-title="Dosyaları yenile" aria-label="Refresh files" data-i18n-aria-label="Dosyaları yenile"></button></div></div>
           <div id="tree-project" class="tree-project"></div>
+          <input id="tree-search" class="tree-search" type="search" placeholder="Search files…" data-i18n-placeholder="Dosya ara…" aria-label="Search project files" data-i18n-aria-label="Proje dosyalarını ara" autocomplete="off">
           <div id="file-tree" class="file-tree"></div>
         </div>
-        <div class="sidebar-footer"><button id="settings" class="icon-button small" data-icon="settings" title="Bağlantı ayarları" aria-label="Bağlantı ayarları"></button><button id="add-project" class="sidebar-footer-label">TEZGAH <span class="muted-dot">·</span> 0.1</span></div>
+        <div class="sidebar-footer"><button id="settings" class="icon-button small" data-icon="settings" title="Settings" data-i18n-title="Ayarlar" aria-label="Settings" data-i18n-aria-label="Ayarlar"></button><button id="add-project" class="sidebar-footer-label" type="button" data-i18n="Proje aç">Open project</button><span>TEZGAH <span class="muted-dot">·</span> 0.2</span></div>
       </aside>
-      <section class="agent-area" aria-label="Ajan çalışma alanı">
+      <section class="agent-area" aria-label="Agent workspace" data-i18n-aria-label="Ajan çalışma alanı">
         <div class="pane-bar agent-bar">
-          <div class="pane-title"><span data-icon="chat"></span><h1>Ajanlar</h1><span id="running-count" class="running-count" hidden></span></div>
+          <div class="pane-title"><span data-icon="chat"></span><h1 data-i18n="Ajanlar">Agents</h1><span id="running-count" class="running-count" hidden></span></div>
           <div class="pane-actions">
-            <div class="segmented" role="group" aria-label="Ajan görünümü">
-              <button id="view-single" type="button" title="Tek ajan" aria-label="Tek ajan" data-icon="single"></button>
-              <button id="view-split" type="button" title="Ajanları yan yana göster" aria-label="Ajanları yan yana göster" data-icon="split"></button>
+            <div class="segmented" role="group" aria-label="Agent layout" data-i18n-aria-label="Ajan görünümü">
+              <button id="view-single" type="button" title="Single agent" data-i18n-title="Tek ajan" aria-label="Single agent" data-i18n-aria-label="Tek ajan" data-icon="single"></button>
+              <button id="view-split" type="button" title="Show agents side by side" data-i18n-title="Ajanları yan yana göster" aria-label="Show agents side by side" data-i18n-aria-label="Ajanları yan yana göster" data-icon="split"></button>
+              <button id="view-orchestrator" type="button" title="Orchestrator" aria-label="Orchestrator" data-icon="branch"></button>
             </div>
-            <button id="add-agent" class="secondary-button" type="button" title="Yeni ajan ekle"><span data-icon="plus"></span><span class="toolbar-label">Yeni ajan</span></button>
+            <button id="add-agent" class="secondary-button" type="button" title="Add a new agent" data-i18n-title="Yeni ajan ekle"><span data-icon="plus"></span><span class="toolbar-label" data-i18n="Yeni ajan">New agent</span></button>
           </div>
         </div>
-        <div id="agent-grid" class="agent-grid"></div>
-      </section>
-      <div id="resizer" class="resizer" role="separator" aria-label="Editör genişliği" aria-orientation="vertical" tabindex="0"></div>
-      <section class="editor-area" aria-label="Kod editörü">
-        <div class="pane-bar editor-bar">
-          <div class="pane-title"><span data-icon="code"></span><h2>Editör</h2></div>
-          <div class="pane-actions"><button id="file-reload" class="icon-button" title="Dosyayı diskten yeniden yükle" aria-label="Dosyayı diskten yeniden yükle" data-icon="refresh" disabled></button><button id="save" class="secondary-button" title="Kaydet (Ctrl+S)" disabled><span data-icon="save"></span>Kaydet</button></div>
+        <div id="orchestration-toolbar" class="orchestration-toolbar" hidden>
+          <label for="orchestrator-select">Orchestrator</label>
+          <select id="orchestrator-select"></select>
+          <button id="orchestrator-team" type="button" class="secondary-button"><span data-icon="settings"></span><span data-i18n="Görev ajanları">Workers</span></button>
         </div>
-        <div id="editor-tabs" class="editor-tabs" role="tablist" aria-label="Açık dosyalar"></div>
+        <div id="agent-workspace" class="agent-workspace">
+          <div id="agent-grid" class="agent-grid"></div>
+          <aside id="orchestration-monitor" class="orchestration-monitor" hidden aria-label="Worker tasks" data-i18n-aria-label="Ajan görevleri"></aside>
+        </div>
+      </section>
+      <div id="resizer" class="resizer" role="separator" aria-label="Editor width" data-i18n-aria-label="Editör genişliği" aria-orientation="vertical" tabindex="0"></div>
+      <section class="editor-area" aria-label="Code editor" data-i18n-aria-label="Kod editörü">
+        <div class="pane-bar editor-bar">
+          <div class="right-tabs" role="tablist" aria-label="Project panels" data-i18n-aria-label="Proje panelleri">
+            <button id="right-editor" type="button" role="tab" aria-controls="editing-view" aria-selected="true"><span data-icon="code"></span><span data-i18n="Editör">Editor</span></button>
+            <button id="right-diff" type="button" role="tab" aria-controls="diff-view" aria-selected="false"><span data-icon="branch"></span>Diff</button>
+            <button id="right-web" type="button" role="tab" aria-controls="preview-view" aria-selected="false"><span data-icon="monitor"></span>Web</button>
+          </div>
+          <div id="editing-actions" class="pane-actions"><button id="file-reload" class="icon-button" title="Reload file from disk" data-i18n-title="Dosyayı diskten yeniden yükle" aria-label="Reload file from disk" data-i18n-aria-label="Dosyayı diskten yeniden yükle" data-icon="refresh" disabled></button><button id="save" class="secondary-button" title="Save (Ctrl+S)" data-i18n-title="Kaydet (Ctrl+S)" disabled><span data-icon="save"></span><span data-i18n="Kaydet">Save</span></button></div>
+          <div id="diff-actions" class="pane-actions" hidden><button id="refresh-diff" class="icon-button" type="button" title="Refresh diff" data-i18n-title="Diff’i yenile" aria-label="Refresh diff" data-i18n-aria-label="Diff’i yenile" data-icon="refresh"></button></div>
+        </div>
+        <div id="editing-view" class="right-view" role="tabpanel" aria-labelledby="right-editor">
+        <div id="editor-tabs" class="editor-tabs" role="tablist" aria-label="Open files" data-i18n-aria-label="Açık dosyalar"></div>
         <div id="breadcrumbs" class="breadcrumbs"></div>
         <div id="editor-notice" class="editor-notice" hidden></div>
         <div id="code-editor" class="code-editor" hidden>
           <div id="line-gutter" class="line-gutter" aria-hidden="true"><div id="line-numbers"></div></div>
-          <div class="code-surface"><pre id="highlight" aria-hidden="true"></pre><textarea id="code-input" aria-label="Dosya içeriği" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"></textarea></div>
+          <div class="code-surface"><pre id="highlight" aria-hidden="true"></pre><textarea id="code-input" aria-label="File contents" data-i18n-aria-label="Dosya içeriği" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"></textarea></div>
         </div>
-        <div id="editor-empty" class="editor-empty"><div class="editor-empty-icon" data-icon="code"></div><strong>Dosya aç</strong><span>Düzenlemek için gezginden bir dosya seç.</span></div>
-        <div class="editor-foot"><span id="editor-position">—</span><span class="editor-foot-spacer"></span><span id="editor-eol">LF</span><span>UTF-8</span><span id="editor-language">Metin</span></div>
+        <div id="editor-empty" class="editor-empty"><div class="editor-empty-icon" data-icon="code"></div><strong data-i18n="Dosya aç">Open a file</strong><span data-i18n="Düzenlemek için gezginden bir dosya seç.">Select a file in the sidebar to edit it.</span></div>
+        <div class="editor-foot"><span id="editor-position">—</span><span class="editor-foot-spacer"></span><span id="editor-eol">LF</span><span>UTF-8</span><span id="editor-language" data-i18n="Metin">Plain text</span></div>
+        </div>
+        <div id="diff-view" class="right-view" role="tabpanel" aria-labelledby="right-diff" hidden>
+          <div id="diff-files" class="diff-files" aria-label="Changed files" data-i18n-aria-label="Değişen dosyalar"></div>
+          <div id="diff-document" class="diff-document"><div class="panel-placeholder" data-i18n="Git değişiklikleri burada görünür.">Git changes appear here.</div></div>
+        </div>
+        <div id="preview-view" class="right-view" role="tabpanel" aria-labelledby="right-web" hidden>
+          <form id="preview-form" class="preview-toolbar">
+            <button id="preview-back" class="icon-button small" type="button" title="Back" data-i18n-title="Geri" aria-label="Back" data-i18n-aria-label="Geri" data-icon="arrowLeft" disabled></button>
+            <button id="preview-forward" class="icon-button small" type="button" title="Forward" data-i18n-title="İleri" aria-label="Forward" data-i18n-aria-label="İleri" data-icon="arrow" disabled></button>
+            <button id="preview-reload" class="icon-button small" type="button" title="Reload" data-i18n-title="Yenile" aria-label="Reload preview" data-i18n-aria-label="Önizlemeyi yenile" data-icon="refresh" disabled></button>
+            <input id="preview-address" type="text" inputmode="url" placeholder="http://localhost:3000" aria-label="Web preview address" data-i18n-aria-label="Web önizleme adresi" spellcheck="false" autocomplete="off" required>
+            <button class="secondary-button" type="submit" data-i18n="Aç">Open</button>
+          </form>
+          <div id="preview-surface" class="preview-surface"><div id="preview-placeholder" class="panel-placeholder" data-i18n="Önizlemek için yerel uygulamanın adresini yaz.">Enter a local app address to preview it.</div></div>
+          <div id="preview-status" class="editor-foot" role="status" hidden></div>
+        </div>
       </section>
     </div>
-    <footer class="statusbar"><div id="status-project"></div><div id="status-message" role="status"></div><div class="status-right"><span data-icon="monitor"></span> Yerel çalışma alanı</div></footer>
+    <footer class="statusbar"><div id="status-project"></div><div id="status-message" role="status"></div><div class="status-right"><span data-icon="monitor"></span><span data-i18n="Yerel çalışma alanı">Local workspace</span></div></footer>
   </div>
   <div id="popover" class="popover" hidden></div>
   <dialog id="dialog" class="dialog"></dialog>

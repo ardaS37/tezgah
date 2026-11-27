@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 const words = /^(?:const|let|var|export|default|import|from|as|function|return|class|extends|if|else|switch|case|for|while|try|catch|finally|throw|async|await|new|typeof|instanceof|in|of|def|lambda|yield|with|except|raise|pass|break|continue|public|private|protected|static|readonly|interface|type|namespace|using|struct|enum|fn|impl|pub|use|match|mod|package|func|go|defer|select)$/;
 const literals = /^(?:true|false|null|undefined|None|True|False|nil|self|this)$/;
 const flavors = {
@@ -48,7 +50,7 @@ export function bindEditor({ input, highlight, gutter, position, onInput }) {
     const before = input.value.slice(0, input.selectionStart);
     const line = before.split('\n').length;
     const column = before.length - before.lastIndexOf('\n');
-    position.textContent = `Satır ${line}, Sütun ${column}`;
+    position.textContent = t('Satır {line}, Sütun {column}', { line, column });
   };
   const draw = () => {
     const value = input.value;
@@ -101,5 +103,6 @@ export function bindEditor({ input, highlight, gutter, position, onInput }) {
       draw();
     },
     view: () => ({ start: input.selectionStart, end: input.selectionEnd, top: input.scrollTop, left: input.scrollLeft }),
+    refreshPosition: cursor,
   };
 }
