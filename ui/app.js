@@ -85,11 +85,11 @@ const catalogs = {};
 const tabs = new Map();
 const layouts = new Map();
 const busy = new Map();
-const queuedHandoffs = new Map();
-const orchestration = { leaderId: '', workerIds: [], jobs: [] };
+const workspaceCache = new Map();
 const treeCache = new Map();
 const expanded = new Set(['demo:src']);
-const agents = [];
+let agents = [], queuedHandoffs = new Map(), orchestration = { leaderId: '', workerIds: [], jobs: [] };
+let switchingProject = false;
 let projects = [], selectedId, activeFile, editorProject = 'demo', viewMode = 'single', editorVisible = innerWidth > 655, width = 46;
 let rightPanel = 'editor';
 let inspector;
@@ -97,10 +97,10 @@ let searchTimer;
 let searchVersion = 0;
 let toastTimer, saveTimer, stateWrites = Promise.resolve(), popAnchor, popRender;
 
-async function request(route, { method = 'GET', body, raw = false, keepalive = false } = {}) {
+async function request(route, { method = 'GET', body, raw = false, keepalive = false, signal } = {}) {
   const headers = { 'X-Tezgah-Token': token, 'X-Tezgah-Locale': getLocale() };
   if (body != null) headers['Content-Type'] = 'application/json';
-  const response = await fetch(`/api/${route}`, { method, headers, body: body == null ? undefined : JSON.stringify(body), keepalive });
+  const response = await fetch(`/api/${route}`, { method, headers, body: body == null ? undefined : JSON.stringify(body), keepalive, signal });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw Object.assign(new Error(error.error || t('Yerel bağlantı kurulamadı.')), { status: response.status });
@@ -162,6 +162,30 @@ function syncAgentProjects() {
   }
 }
 
+function readWorkspace(snapshot, project) {
+  const items = (Array.isArray(snapshot?.agents) ? snapshot.agents : [])
+    .filter((entry) => entry && Object.hasOwn(providers, entry.provider) && projectOf(entry.project))
+    .map((entry) => ({ ...entry, projectOverride: entry.projectOverride ?? (entry.project !== project), state: 'idle' }));
+  const ids = new Set(items.map((agent) => agent.id));
+  const team = snapshot?.orchestration;
+  const leaderId = ids.has(team?.leaderId) ? team.leaderId : '';
+  const mode = snapshot?.viewMode === 'orchestrator' && leaderId ? 'orchestrator' : snapshot?.viewMode === 'split' ? 'split' : 'single';
+  const handoffs = Array.isArray(snapshot?.queuedHandoffs) ? snapshot.queuedHandoffs : [];
+  return {
+    agents: items,
+    selectedId: mode === 'orchestrator' ? leaderId : ids.has(snapshot?.selectedId) ? snapshot.selectedId : items[0]?.id,
+    viewMode: mode,
+    queuedHandoffs: new Map(handoffs.filter((entry) => Array.isArray(entry) && ids.has(entry[0]) && entry[1])),
+    orchestration: {
+      leaderId,
+      workerIds: (Array.isArray(team?.workerIds) ? team.workerIds : []).filter((id) => id !== leaderId && ids.has(id)).slice(0, 7),
+      jobs: (Array.isArray(team?.jobs) ? team.jobs : []).slice(-24).map((job) => ({ ...job, status: job.status === 'running' ? 'interrupted' : job.status })),
+    },
+    rightPanel: snapshot?.rightPanel || 'editor',
+    activeFile: snapshot?.activeFile,
+  };
+}
+
 function toast(message) {
   clearTimeout(toastTimer);
   $('toast').textContent = message;
@@ -178,11 +202,16 @@ function saveView(immediately = false) {
         goal, sentGoal, goalStatus, messages: messages.slice(-20).map((entry) => ({ ...entry, text: entry.text?.slice(0, 9000), approval: undefined })),
       })),
       modelProfiles: [...modelProfiles], appearance, locale: getLocale(), selectedId, editorProject, viewMode, rightPanel, editorVisible, width, activeFile: openTab()?.file,
+      queuedHandoffs: [...queuedHandoffs],
       orchestration: { leaderId: orchestration.leaderId, workerIds: orchestration.workerIds, jobs: orchestration.jobs.slice(-24).map(({ done, ...job }) => job) },
     };
-    stateWrites = stateWrites.catch(() => {}).then(() => request('state', { method: 'PUT', body: snapshot })).catch(() => { $('status-message').textContent = t('Çalışma görünümü kaydedilemedi'); });
+    stateWrites = stateWrites.then(async () => {
+      try { await request('state', { method: 'PUT', body: snapshot }); return true; }
+      catch { $('status-message').textContent = t('Çalışma görünümü kaydedilemedi'); return false; }
+    });
+    return stateWrites;
   };
-  if (immediately) write();
+  if (immediately) return write();
   else saveTimer = setTimeout(write, 350);
 }
 
@@ -200,6 +229,10 @@ function renderGlobal() {
   $('view-single').setAttribute('aria-pressed', viewMode === 'single');
   $('view-split').setAttribute('aria-pressed', viewMode === 'split');
   $('view-orchestrator').setAttribute('aria-pressed', viewMode === 'orchestrator');
+  for (const id of ['view-single', 'view-split', 'view-orchestrator']) $(id).disabled = !agents.length;
+  for (const id of ['workspace-button', 'add-project', 'sidebar-add-agent']) $(id).disabled = switchingProject;
+  document.querySelector('.agent-area').inert = switchingProject;
+  $('agent-list').inert = switchingProject;
   document.querySelector('.connection-dot').classList.toggle('ok', Object.values(catalogs).some((entry) => entry.status === 'ready'));
   const project = projectOf(editorProject);
   $('workspace-button').replaceChildren(icon('folder'), el('strong', '', project?.name || t('Proje aç')), icon('down'));
@@ -211,7 +244,8 @@ function renderGlobal() {
   $('running-count').textContent = t('{count} çalışıyor', { count: running });
   const projectsRunning = [...busy.values()].map((item) => item.project);
   const shared = projectsRunning.find((id, index) => projectsRunning.indexOf(id) !== index);
-  $('status-message').textContent = shared ? t('{project} · Ortak klasörde paralel çalışma', { project: projectOf(shared)?.name || t('Proje') })
+  $('status-message').textContent = switchingProject ? t('Proje değiştiriliyor…')
+    : shared ? t('{project} · Ortak klasörde paralel çalışma', { project: projectOf(shared)?.name || t('Proje') })
     : running === 1 ? t('1 ajan çalışıyor') : running ? t('{count} ajan çalışıyor', { count: running }) : '';
   $('agent-list').replaceChildren(...agents.map((agent) => {
     const row = button(`agent-row ${agent.id === selectedId ? 'active' : ''}`, `${agent.name} · ${projectOf(agent.project)?.name || ''}`,
@@ -241,6 +275,11 @@ function selectAgent(agent, focus = false) {
 
 function renderAgents() {
   const grid = $('agent-grid');
+  if (!agents.length) {
+    grid.classList.remove('split', 'single-tile', 'many-tiles');
+    grid.replaceChildren(el('div', 'welcome', el('p', '', t('Bu projede henüz ajan yok.'))));
+    return;
+  }
   const start = Math.max(0, Math.min(agents.findIndex((item) => item.id === selectedId), agents.length - maxPanels));
   const visible = viewMode === 'split' ? agents.slice(start, start + maxPanels)
     : [viewMode === 'orchestrator' ? agentOf(orchestration.leaderId) : selected()].filter(Boolean);
@@ -613,7 +652,7 @@ function renderHandoffQueue(agent, element) {
   const running = busy.has(agent.id) || pendingFolder(agent);
   const changed = pending.target !== handoffTarget(agent);
   const remove = button('icon-button small', t('Sıradaki aktarımı kaldır'), icon('x'));
-  remove.onclick = () => { queuedHandoffs.delete(agent.id); updateAgentControls(agent); };
+  remove.onclick = () => { queuedHandoffs.delete(agent.id); updateAgentControls(agent); saveView(); };
   const process = button('secondary-button', '', changed ? t('Taslağa al') : t('Çalıştır'));
   process.onclick = () => {
     if (changed) {
@@ -629,7 +668,7 @@ function renderHandoffQueue(agent, element) {
 
 function runQueuedHandoff(agent) {
   const pending = queuedHandoffs.get(agent.id);
-  if (!pending || busy.has(agent.id) || pendingFolder(agent) || pending.target !== handoffTarget(agent)) return;
+  if (!pending || switchingProject || busy.has(agent.id) || pendingFolder(agent) || pending.target !== handoffTarget(agent)) return;
   queuedHandoffs.delete(agent.id);
   submit(agent, pending);
 }
@@ -821,7 +860,7 @@ async function stopTurn(agent) {
 }
 
 async function submit(agent, handoff) {
-  if ((!handoff && !canSend(agent)) || busy.has(agent.id)) return;
+  if (switchingProject || (!handoff && !canSend(agent)) || busy.has(agent.id)) return;
   if (!handoff && runSlashCommand(agent, agent.draft.trim())) return;
   if (!handoff?.delegatedBy && pendingFolder(agent)) {
     toast(t('Tur bitince çalışma klasörü · {project}', { project: projectOf(editorProject)?.name }));
@@ -843,7 +882,10 @@ async function submit(agent, handoff) {
   const resumeGoal = !handoff && agent.resumeGoal === true;
   if (resumeGoal) agent.resumeGoal = false;
   const turn = crypto.randomUUID();
-  const run = { project: agent.project, turn, approvals: new Map(), outputs: new Map(), activity: t('Ajan başlatılıyor…'), done: false, frame: 0, team, jobs: [], jobId: handoff?.jobId, mode };
+  const stream = new AbortController();
+  let finishRun;
+  const settled = new Promise((resolve) => { finishRun = resolve; });
+  const run = { project: agent.project, turn, approvals: new Map(), outputs: new Map(), activity: t('Ajan başlatılıyor…'), done: false, frame: 0, team, jobs: [], jobId: handoff?.jobId, mode, stream, settled };
   const labels = [...attachments.map((item) => item.file), ...(image ? [t('Çizim')] : [])];
   agent.messages.push({ id: turn, turn, project: agent.project, role: 'user', text: labels.length ? `${text}\n\n${t('Ekler: {list}', { list: labels.join(', ') })}` : text });
   if (!handoff) {
@@ -911,7 +953,7 @@ async function submit(agent, handoff) {
   };
   try {
     const chromeTab = agent.chromeTab?.model === modelKey(agent) ? agent.chromeTab.id : '';
-    const response = await request('turn', { method: 'POST', raw: true, body: { id: agent.id, provider: agent.provider, project: agent.project, prompt, model: agent.model, effort: activeEffort(agent), mode, resume: delegatedBy ? '' : agent.resume, options: { ...profile(agent), fastMode: fastModeOn(agent), chromeTab, workers: team }, image, goal, resumeGoal } });
+    const response = await request('turn', { method: 'POST', raw: true, signal: stream.signal, body: { id: agent.id, provider: agent.provider, project: agent.project, prompt, model: agent.model, effort: activeEffort(agent), mode, resume: delegatedBy ? '' : agent.resume, options: { ...profile(agent), fastMode: fastModeOn(agent), chromeTab, workers: team }, image, goal, resumeGoal } });
     if (run.stopRequested) stopTurn(agent);
     let buffer = '';
     for await (const chunk of response.body.pipeThrough(new TextDecoderStream())) {
@@ -923,12 +965,18 @@ async function submit(agent, handoff) {
     if (buffer.trim()) handle(JSON.parse(buffer));
     if (!run.done) throw new Error(t('Ajan bağlantısı yanıt tamamlanmadan kapandı.'));
   } catch (error) {
-    agent.state = 'error';
-    run.problem = error.message;
-    agent.messages.push({ id: crypto.randomUUID(), turn, role: 'error', text: error.message });
+    if (run.stopRequested) {
+      run.cancelled = true;
+      agent.messages.push({ id: crypto.randomUUID(), turn, role: 'notice', text: 'Ajan durduruldu.' });
+    } else {
+      agent.state = 'error';
+      run.problem = error.message;
+      agent.messages.push({ id: crypto.randomUUID(), turn, role: 'error', text: error.message });
+    }
   } finally {
     cancelAnimationFrame(run.frame);
     busy.delete(agent.id);
+    finishRun();
     syncAgentProjects();
     renderGlobal();
     updateAgentControls(agent);
@@ -1351,6 +1399,7 @@ function handoffDialog(source) {
       if (shouldQueue(target)) {
         queuedHandoffs.set(target.id, pending);
         updateAgentControls(target);
+        saveView();
         toast(t('{agent} için sıraya alındı.', { agent: target.name }));
       } else submit(target, pending);
     };
@@ -1500,24 +1549,54 @@ function projectMenu() {
   openPopover($('workspace-button'), () => [el('div', 'popover-heading', t('Çalışma alanı klasörleri')), ...projects.map((project) => menuButton('folder', project.name, () => switchEditorProject(project), { checked: project.id === editorProject })), menuButton('plus', t('Proje klasörü aç'), () => projectDialog())]);
 }
 
-function switchEditorProject(project) {
-  if (!project) return;
-  const folderChanged = editorProject !== project.id;
-  editorProject = project.id;
-  for (const agent of agents) agent.projectOverride = false;
-  syncAgentProjects();
-  renderAgents();
-  if (folderChanged) {
+async function switchEditorProject(project) {
+  if (!project || switchingProject) return;
+  if (editorProject === project.id) {
+    for (const agent of agents) agent.projectOverride = false;
+    syncAgentProjects();
+    renderAgents();
+    renderGlobal();
+    refreshTree();
+    saveView(true);
+    return;
+  }
+
+  switchingProject = true;
+  renderGlobal();
+  try {
+    const running = [...busy.entries()];
+    for (const [id, run] of running) if (!run.stopRequested) void stopTurn(agentOf(id));
+    const abortStreams = setTimeout(() => { for (const [, run] of running) run.stream.abort(); }, 7000);
+    try {
+      const drains = running.flatMap(([, run]) => [run.settled, ...run.jobs.map((job) => job.done)]);
+      await Promise.allSettled(drains);
+    } finally { clearTimeout(abortStreams); }
+    if (!await saveView(true)) throw new Error(t('Çalışma görünümü kaydedilemedi'));
+    workspaceCache.set(editorProject, { agents, selectedId, viewMode, orchestration, queuedHandoffs, rightPanel, activeFile: openTab()?.file });
+    const incoming = workspaceCache.get(project.id) ?? readWorkspace((await request(query('workspace', { project: project.id }))).workspace, project.id);
+    editorProject = project.id;
+    ({ agents, selectedId, viewMode, orchestration, queuedHandoffs, rightPanel } = incoming);
+    layouts.clear();
+    $('orchestrator-select').replaceChildren();
+    $('orchestration-monitor').replaceChildren();
+    syncAgentProjects();
     $('tree-search').value = '';
     searchVersion++;
     fileSelection++;
-    const latest = [...tabs.values()].findLast((tab) => tab.project === project.id);
-    setActiveTab(latest?.key || null);
-    if (!latest && project.initialFile) void openFile(project.id, project.initialFile, false);
+    const file = incoming.activeFile || project.initialFile;
+    const tab = (file && tabs.get(keyFor(editorProject, file))) || [...tabs.values()].findLast((item) => item.project === editorProject);
+    setActiveTab(tab?.key || null);
+    inspector.select(rightPanel, false);
+    renderAgents();
+    refreshTree();
+    if (!tab && file) await openFile(editorProject, file, false);
+    if (!await saveView(true)) toast(t('Çalışma görünümü kaydedilemedi'));
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    switchingProject = false;
+    renderGlobal();
   }
-  renderGlobal();
-  refreshTree();
-  saveView(true);
 }
 
 async function fetchFolder(project, directory, force = false) {
@@ -1777,6 +1856,7 @@ function bindApp() {
   $('editor-toggle').onclick = () => { editorVisible = !editorVisible; renderGlobal(); saveView(); };
   $('sidebar-toggle').onclick = () => $('app').classList.toggle('sidebar-open');
   const view = (mode) => {
+    if (!agents.length) return;
     viewMode = mode;
     if (mode === 'orchestrator') {
       if (!agentOf(orchestration.leaderId)) { chooseOrchestrator(selectedId); return; }
@@ -1802,7 +1882,7 @@ function bindApp() {
   window.addEventListener('focus', checkEditorChanges);
   window.setInterval(() => { if (!document.hidden) checkEditorChanges(); }, 2500);
   window.addEventListener('beforeunload', (event) => {
-    if ([...tabs.values()].some(isDirty) || busy.size || queuedHandoffs.size) { event.preventDefault(); event.returnValue = ''; }
+    if ([...tabs.values()].some(isDirty) || busy.size || queuedHandoffs.size || switchingProject) { event.preventDefault(); event.returnValue = ''; }
   });
   const grip = $('resizer');
   function resize(value) {
@@ -1837,23 +1917,12 @@ async function init() {
     if (['terminal', 'standard'].includes(view.appearance?.mode)) appearance.mode = view.appearance.mode;
     for (const mode of ['terminal', 'standard']) if (Object.hasOwn(palettes, view.appearance?.palettes?.[mode])) appearance.palettes[mode] = view.appearance.palettes[mode];
     editorProject = projectOf(view.editorProject)?.id || projects[0].id;
-    rightPanel = view.rightPanel || 'editor';
-    if (Array.isArray(view.agents)) {
-      for (const entry of view.agents) {
-        if (!providers[entry.provider] || !projectOf(entry.project)) continue;
-        agents.push({ ...entry, projectOverride: entry.projectOverride ?? (entry.project !== editorProject), state: 'idle' });
-      }
+    ({ agents, selectedId, viewMode, orchestration, queuedHandoffs, rightPanel } = readWorkspace(view, editorProject));
+    if (!Array.isArray(view.agents) && editorProject === 'demo') {
+      agents.push(freshAgent('codex', editorProject), freshAgent('claude', editorProject));
+      selectedId = agents[0].id;
     }
-    if (!agents.length) agents.push(freshAgent('codex', editorProject), freshAgent('claude', editorProject));
     syncAgentProjects();
-    selectedId = agentOf(view.selectedId)?.id || agents[0].id;
-    if (agentOf(view.orchestration?.leaderId)) {
-      orchestration.leaderId = view.orchestration.leaderId;
-      if (Array.isArray(view.orchestration.workerIds)) orchestration.workerIds = view.orchestration.workerIds.filter((id) => id !== orchestration.leaderId && agentOf(id)).slice(0, 7);
-      if (Array.isArray(view.orchestration.jobs)) orchestration.jobs = view.orchestration.jobs.slice(-24).map((job) => ({ ...job, status: job.status === 'running' ? 'interrupted' : job.status }));
-    }
-    viewMode = view.viewMode === 'orchestrator' && orchestration.leaderId ? 'orchestrator' : view.viewMode === 'split' ? 'split' : 'single';
-    if (viewMode === 'orchestrator') selectedId = orchestration.leaderId;
     editorVisible = view.editorVisible ?? editorVisible;
     width = Math.min(65, Math.max(23, view.width || width));
     $('resizer').setAttribute('aria-valuenow', Math.round(width));

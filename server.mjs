@@ -125,6 +125,7 @@ export async function startServer({
       if (request.headers['x-tezgah-token'] !== token) throw failure('Konsey’i başlangıç bağlantısından aç.', 403);
       const query = url.searchParams;
       if (route === '/api/state' && method === 'GET') return json(response, { ...state.snapshot(), tools: Object.keys(desktopTools), preview: !!preview });
+      if (route === '/api/workspace' && method === 'GET') return json(response, { workspace: state.workspace(query.get('project')) });
       if (route === '/api/changes' && method === 'GET') return json(response, await changes(state.project(query.get('project'))));
       if (route === '/api/diff' && method === 'GET') return json(response, await fileDiff(state.project(query.get('project')), query.get('file')));
       if (route === '/api/preview' && preview) {

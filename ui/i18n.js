@@ -80,6 +80,8 @@ const english = {
   'Proje klasörü': 'Project folder',
   'Proje yolu · {project}': 'Project path · {project}',
   'Çalışma alanı klasörleri': 'Workspace folders',
+  'Proje değiştiriliyor…': 'Switching projects…',
+  'Bu projede henüz ajan yok.': 'No agents in this project yet.',
   'Klasörü seç': 'Select folder',
   'Klasör yolu': 'Folder path',
   'C:\\Projeler\\uygulama': 'C:\\Projects\\my-app',
