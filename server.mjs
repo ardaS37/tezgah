@@ -16,10 +16,10 @@ import { normalizeLocale, translate } from './ui/i18n.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const localDataRoot = process.env.LOCALAPPDATA || os.homedir();
-const dataPath = path.join(localDataRoot, 'Tezgah');
-const legacyDataPath = path.join(localDataRoot, 'Eksen');
-export const defaultDataDir = process.env.TEZGAH_DATA_DIR || process.env.EKSEN_DATA_DIR ||
-  (!existsSync(dataPath) && existsSync(legacyDataPath) ? legacyDataPath : dataPath);
+const dataPath = path.join(localDataRoot, 'Konsey');
+const legacyDataPaths = ['Tezgah', 'Eksen'].map((name) => path.join(localDataRoot, name));
+export const defaultDataDir = process.env.KONSEY_DATA_DIR || process.env.TEZGAH_DATA_DIR || process.env.EKSEN_DATA_DIR ||
+  [dataPath, ...legacyDataPaths].find((candidate) => existsSync(candidate)) || dataPath;
 const staticFiles = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
@@ -28,7 +28,7 @@ const staticFiles = {
   '/editor.js': ['editor.js', 'text/javascript; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'],
   '/inspector.js': ['inspector.js', 'text/javascript; charset=utf-8'],
-  '/logo.svg': ['logo.svg', 'image/svg+xml'],
+  '/logo.png': ['logo.png', 'image/png'],
 };
 
 function json(response, value, status = 200) {
@@ -62,7 +62,7 @@ async function pickFolder(locale) {
     const script = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Add-Type -AssemblyName System.Windows.Forms; $owner = New-Object System.Windows.Forms.Form; $owner.ShowInTaskbar = $false; $owner.Opacity = 0; $owner.TopMost = $true; $owner.Show(); $dialog = New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description = $env:TEZGAH_PICKER_TITLE; $dialog.ShowNewFolderButton = $false; if ($dialog.ShowDialog($owner) -eq "OK") { [Console]::Write($dialog.SelectedPath) }; $dialog.Dispose(); $owner.Dispose()';
     const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-STA', '-Command', script], {
       windowsHide: true,
-      env: { ...process.env, TEZGAH_PICKER_TITLE: translate(locale, 'Tezgah · Proje klasörü aç') },
+      env: { ...process.env, TEZGAH_PICKER_TITLE: translate(locale, 'Konsey · Proje klasörü aç') },
     });
     const result = await collect(child, { timeout: 180_000 });
     if (result.code !== 0) throw failure('Klasör seçici açılamadı. Klasör yolunu elle girebilirsin.');
@@ -122,7 +122,7 @@ export async function startServer({
         response.end(await readFile(path.join(here, 'ui', file)));
         return;
       }
-      if (request.headers['x-tezgah-token'] !== token) throw failure('Tezgah’ı başlangıç bağlantısından aç.', 403);
+      if (request.headers['x-tezgah-token'] !== token) throw failure('Konsey’i başlangıç bağlantısından aç.', 403);
       const query = url.searchParams;
       if (route === '/api/state' && method === 'GET') return json(response, { ...state.snapshot(), tools: Object.keys(desktopTools), preview: !!preview });
       if (route === '/api/changes' && method === 'GET') return json(response, await changes(state.project(query.get('project'))));
@@ -284,5 +284,5 @@ export async function startServer({
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const local = await startServer();
-  console.log(translate(local.getLocale(), 'Tezgah hazır. {url}', { url: local.url }));
+  console.log(translate(local.getLocale(), 'Konsey hazır. {url}', { url: local.url }));
 }

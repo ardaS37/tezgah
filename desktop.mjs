@@ -5,7 +5,7 @@ import { createDesktopTools } from './lib/electron-tools.mjs';
 import { createPreview } from './lib/preview.mjs';
 import { translate } from './ui/i18n.js';
 
-app.setName('Tezgah');
+app.setName('Konsey');
 app.setAppUserModelId('io.github.ardas37.tezgah');
 
 let mainWindow;
@@ -26,7 +26,7 @@ async function pickFolder(locale) {
   pickerOpen = true;
   try {
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: translate(locale, 'Tezgah · Proje klasörü aç'),
+      title: translate(locale, 'Konsey · Proje klasörü aç'),
       buttonLabel: translate(locale, 'Klasörü seç'),
       properties: ['openDirectory'],
     });
@@ -54,8 +54,8 @@ function configureWindow(window, url) {
     const locale = local?.getLocale();
     const response = dialog.showMessageBoxSync(window, {
       type: 'warning',
-      title: 'Tezgah',
-      message: translate(locale, 'Tezgah kapatılsın mı?'),
+      title: 'Konsey',
+      message: translate(locale, 'Konsey kapatılsın mı?'),
       detail: translate(locale, 'Kaydedilmemiş düzenlemeler, çalışan ajanlar veya sıradaki aktarımlar var.'),
       buttons: ['Açık tut', 'Kapat'].map((label) => translate(locale, label)),
       defaultId: 0,
@@ -75,8 +75,8 @@ async function open() {
   });
 
   const window = new BrowserWindow({
-    title: 'Tezgah',
-    icon: path.join(app.getAppPath(), 'assets', 'tezgah.ico'),
+    title: 'Konsey',
+    icon: path.join(app.getAppPath(), 'assets', 'konsey.ico'),
     width: 1500,
     height: 940,
     minWidth: 740,
@@ -107,7 +107,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.whenReady().then(open).catch((error) => {
     const locale = local?.getLocale();
-    dialog.showErrorBox(translate(locale, 'Tezgah açılamadı'), translate(locale, error.message));
+    dialog.showErrorBox(translate(locale, 'Konsey açılamadı'), translate(locale, error.message));
     app.exit(1);
   });
 }

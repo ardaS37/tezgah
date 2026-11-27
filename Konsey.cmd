@@ -1,8 +1,8 @@
 @echo off
-title Tezgah
+title Konsey
 cd /d "%~dp0"
 if not exist "node_modules\electron\package.json" (
-  echo Run npm ci in this folder to install Tezgah's development dependencies.
+  echo Run npm ci in this folder to install Konsey's development dependencies.
   pause
   exit /b 1
 )

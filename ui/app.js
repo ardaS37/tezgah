@@ -77,7 +77,7 @@ const approvalLabels = { ask: 'Onay iste', auto: 'Benim için onayla', full: 'Ta
 const goalLabels = { active: 'Etkin', paused: 'Duraklatıldı', blocked: 'Beklemede', complete: 'Tamamlandı', usageLimited: 'Kullanım sınırı', budgetLimited: 'Bütçe sınırı' };
 const maxPanels = 8;
 const modelProfiles = new Map();
-const palettes = { dark: 'True Dark', darcula: 'Darcula', dracula: 'Dracula', nord: 'Nord', graphite: 'Grafit', amber: 'Kehribar', blue: 'Gece mavisi', green: 'Fosfor' };
+const palettes = { dark: 'True Dark', konsey: 'Konsey', darcula: 'Darcula', dracula: 'Dracula', nord: 'Nord', graphite: 'Grafit', amber: 'Kehribar', blue: 'Gece mavisi', green: 'Fosfor' };
 let appearance = { mode: 'terminal', palettes: { terminal: 'dark', standard: 'graphite' } };
 let availableTools = [];
 const catalogs = {};
@@ -180,7 +180,7 @@ function renderGlobal() {
   $('workspace-button').replaceChildren(icon('folder'), el('strong', '', project?.name || t('Proje aç')), icon('down'));
   $('workspace-button').title = project?.root || t('Proje aç');
   $('tree-project').replaceChildren(icon('folder'), el('span', '', project?.name || t('Proje seçilmedi')));
-  $('status-project').replaceChildren(icon('folder'), el('span', '', project?.name || 'Tezgah'));
+  $('status-project').replaceChildren(icon('folder'), el('span', '', project?.name || 'Konsey'));
   const running = busy.size;
   $('running-count').hidden = running === 0;
   $('running-count').textContent = t('{count} çalışıyor', { count: running });
@@ -841,7 +841,7 @@ function approvalPopover(anchor, agent) {
         cancel.onclick = close;
         const confirm = button('button-primary', '', t('Tam erişimi aç'));
         confirm.onclick = () => { saveModelOption(agent, 'permissions', 'full'); close(); };
-        body.append(el('p', '', t('{model} kod modunda sağlayıcının tam erişim ayarıyla çalışacak. Tezgah’ın tarayıcı ve bilgisayar işlemleri kendi onaylarını göstermeye devam eder.', { model: modelLabel(agent) })), el('div', 'dialog-actions', cancel, confirm));
+        body.append(el('p', '', t('{model} kod modunda sağlayıcının tam erişim ayarıyla çalışacak. Konsey’in tarayıcı ve bilgisayar işlemleri kendi onaylarını göstermeye devam eder.', { model: modelLabel(agent) })), el('div', 'dialog-actions', cancel, confirm));
       });
     }, { checked: prefs.permissions === id, disabled: id === 'auto' && catalogModel(agent)?.supportsAutoMode === false })),
     ...(activeMode(agent) === 'plan' ? [el('div', 'popover-empty', t('Plan modunda sağlayıcı salt okunur çalışır.'))] : []),
@@ -1229,7 +1229,7 @@ function connectionsDialog() {
     };
     const done = button('button-primary', '', t('Tamam'));
     done.onclick = close;
-    body.append(el('p', '', t('Tezgah, bilgisayarındaki komut satırı araçlarını ve mevcut oturumlarını kullanır. Aşağıdaki komutlarla terminalden bağlanabilirsin.')), rows, el('div', 'dialog-actions', refresh, done));
+    body.append(el('p', '', t('Konsey, bilgisayarındaki komut satırı araçlarını ve mevcut oturumlarını kullanır. Aşağıdaki komutlarla terminalden bağlanabilirsin.')), rows, el('div', 'dialog-actions', refresh, done));
     renderConnections();
   });
 }
@@ -1686,7 +1686,7 @@ async function init() {
     refreshCatalogs();
     if (firstFile) await openFile(editorProject, firstFile, false);
   } catch (error) {
-    $('agent-grid').replaceChildren(el('div', 'welcome', el('h2', '', t('Tezgah açılamadı')), el('p', '', error.message)));
+    $('agent-grid').replaceChildren(el('div', 'welcome', el('h2', '', t('Konsey açılamadı')), el('p', '', error.message)));
   }
 }
 

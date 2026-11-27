@@ -73,6 +73,21 @@
   --theme-type: #8fbcbb;
 }
 
+[data-palette='konsey'] {
+  --theme-deep: #1a0c10;
+  --theme-canvas: #221016;
+  --theme-bar: #36151e;
+  --theme-raised: #431b25;
+  --theme-hover: #57232d;
+  --theme-rule: #6b313b;
+  --theme-muted: #d5aaa5;
+  --theme-text: #fff0d7;
+  --theme-accent: #ffc850;
+  --theme-string: #efc98e;
+  --theme-keyword: #ff9589;
+  --theme-type: #ffe19e;
+}
+
 [data-palette='amber'] {
   --theme-deep: #151310;
   --theme-canvas: #191612;
@@ -161,8 +176,7 @@
   .shell.editor-hidden .workbench { grid-template-columns: 222px minmax(0, 1fr); }
   .topbar { padding-inline: 13px; gap: 10px; }
   .brand { gap: 7px; font-size: 17px; font-weight: 700; letter-spacing: 0; }
-  .brand img { display: none; }
-  .brand::before { content: '›_'; color: var(--theme-accent); font-size: 18px; }
+  .brand img { width: 24px; height: 24px; }
   .top-divider { height: 17px; }
   .top-project { border-radius: 0; }
   .top-project strong { font-weight: 520; }
@@ -219,6 +233,12 @@
   .statusbar { font-family: var(--mono); }
 }
 
+[data-palette='konsey'] {
+  .segmented button[aria-pressed='true'], .panel-button[aria-pressed='true'], .composer-tool.plan { background: var(--theme-hover); color: var(--theme-accent); }
+  .agent-row.active { border-color: var(--theme-accent); }
+  .diff-list, .diff-document { background: var(--theme-deep); }
+}
+
 .theme-swatches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .theme-swatch { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; text-align: left; }
 .theme-swatch:hover { background: var(--raised); }
@@ -228,6 +248,7 @@
 .theme-swatch[data-sample='darcula'] .theme-sample { background: #2b2b2b; border-color: #dc955f; }
 .theme-swatch[data-sample='dracula'] .theme-sample { background: #282a36; border-color: #bd93f9; }
 .theme-swatch[data-sample='nord'] .theme-sample { background: #2e3440; border-color: #88c0d0; }
+.theme-swatch[data-sample='konsey'] .theme-sample { background: #57232d; border-color: #ffc850; }
 .theme-swatch[data-sample='amber'] .theme-sample { background: #201c17; border-color: #edb477; }
 .theme-swatch[data-sample='blue'] .theme-sample { background: #192334; border-color: #9abcff; }
 .theme-swatch[data-sample='green'] .theme-sample { background: #18251d; border-color: #a4e4ad; }

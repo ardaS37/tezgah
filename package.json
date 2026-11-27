@@ -1,9 +1,9 @@
 {
-  "name": "tezgah",
+  "name": "konsey",
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "productName": "Tezgah",
+  "productName": "Konsey",
   "description": "A local desktop workspace for coding agents and a side-by-side editor",
   "main": "desktop.mjs",
   "scripts": {
@@ -19,11 +19,11 @@
   },
   "build": {
     "appId": "io.github.ardas37.tezgah",
-    "files": ["desktop.mjs", "server.mjs", "lib/**", "ui/**", "assets/tezgah.ico"],
+    "files": ["desktop.mjs", "server.mjs", "lib/**", "ui/**", "assets/konsey.ico"],
     "extraResources": [{ "from": "example", "to": "example" }, { "from": "assets/computer-use.ps1", "to": "assets/computer-use.ps1" }],
-    "win": { "icon": "assets/tezgah.ico" },
+    "win": { "icon": "assets/konsey.ico" },
     "nsis": {
-      "artifactName": "Tezgah-Setup-${version}-${arch}.${ext}",
+      "artifactName": "Konsey-Setup-${version}-${arch}.${ext}",
       "perMachine": false,
       "differentialPackage": false
     }
